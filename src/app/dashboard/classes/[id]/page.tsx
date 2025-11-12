@@ -467,7 +467,7 @@ export default function ClassDetailsPage() {
       cursorY += 28;
 
       doc.setFontSize(10);
-      doc.setFont(undefined, "bold");
+      doc.setFont("poppins", "bold");
 
       const colWidths = [150, 80, 80, 150];
       const headers = ["Student Name", "Date", "Time", "Marked By"];
@@ -483,7 +483,7 @@ export default function ClassDetailsPage() {
       }
 
       doc.setTextColor(0, 0, 0);
-      doc.setFont(undefined, "normal");
+      doc.setFont("poppins", "normal");
       cursorY += 20;
 
       attendanceRows.forEach((r) => {
