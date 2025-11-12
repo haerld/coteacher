@@ -18,6 +18,8 @@ import { useAuthRedirect } from "@/hooks/useAuthRedirect";
 
 export default function SignupPage() {
   const router = useRouter();
+  const [firstname, setFirstname] = useState("");
+  const [lastname, setLastname] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
@@ -36,19 +38,44 @@ export default function SignupPage() {
     }
 
     setLoading(true);
-    const { error } = await supabase.auth.signUp({
+    const { data, error } = await supabase.auth.signUp({
       email,
       password,
     });
-    setLoading(false);
 
     if (error) {
       setMessage(error.message);
     } else {
+      
+      if(data.user) {
+        const { id, email } = data.user;
+        
+        const { error: insertError } = await supabase
+        .from("teachers")
+        .insert([
+          {
+            id,
+            email,
+            firstname,
+            lastname,
+            created_at: new Date(),
+          }
+        ])
+
+
+        if (insertError) {
+          console.error("Teacher insert error:", insertError.message);
+          setMessage("Error creating teacher record");
+          setLoading(false);
+          return;
+        }
+      }
+
       toast.success("Sign-up successful!", {
         description: "Please check your email for verification.",
       });
       setTimeout(() => {
+        setLoading(false);
         router.push("/auth/login");
       }, 2500);
     }
@@ -86,6 +113,31 @@ export default function SignupPage() {
                 initial={{ opacity: 0, y: 10 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: 0.3, duration: 0.4 }}
+                className="flex gap-2"
+              >
+                <Input
+                  type="text"
+                  placeholder="First Name"
+                  value={firstname}
+                  onChange={(e) => setFirstname(e.target.value)}
+                  className="focus-visible:ring-[#f7797d] h-11 mb-3"
+                  required
+                />
+
+                <Input
+                  type="text"
+                  placeholder="Last Name"
+                  value={lastname}
+                  onChange={(e) => setLastname(e.target.value)}
+                  className="focus-visible:ring-[#f7797d] h-11 mb-3"
+                  required
+                />
+              </motion.div>
+
+              <motion.div
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.4, duration: 0.4 }}
               >
                 <Input
                   type="email"
@@ -100,7 +152,7 @@ export default function SignupPage() {
               <motion.div
                 initial={{ opacity: 0, y: 10 }}
                 animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: 0.4, duration: 0.4 }}
+                transition={{ delay: 0.5, duration: 0.4 }}
               >
                 <Input
                   type="password"
@@ -115,7 +167,7 @@ export default function SignupPage() {
               <motion.div
                 initial={{ opacity: 0, y: 10 }}
                 animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: 0.5, duration: 0.4 }}
+                transition={{ delay: 0.6, duration: 0.4 }}
               >
                 <Input
                   type="password"
@@ -134,12 +186,12 @@ export default function SignupPage() {
               <motion.div
                 initial={{ opacity: 0, y: 10 }}
                 animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: 0.6, duration: 0.4 }}
+                transition={{ delay: 0.7, duration: 0.4 }}
               >
                 <Button
                   type="submit"
                   disabled={loading}
-                  className="w-full bg-gradient-to-r from-[#f5576c] to-[#F7BB97] text-white hover:opacity-90 transition mt-5"
+                  className="cursor-pointer w-full bg-gradient-to-r from-[#f5576c] to-[#F7BB97] text-white hover:opacity-90 transition mt-5"
                 >
                   {loading ? (
                     <>
@@ -158,7 +210,7 @@ export default function SignupPage() {
             <motion.p
               initial={{ opacity: 0, y: 10 }}
               animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.7, duration: 0.4 }}
+              transition={{ delay: 0.8, duration: 0.4 }}
               className="text-sm text-[#f5576c] hover:underline cursor-pointer"
               onClick={() => router.push("/auth/login")}
             >

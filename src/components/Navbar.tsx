@@ -63,7 +63,7 @@ export default function Navbar() {
             <Link href="/auth/signup">
               <Button
                 variant="default"
-                className="bg-gradient-to-r from-[#f5576c] to-[#F7BB97] text-white shadow-lg shadow-[#f5576c]/30 hover:opacity-90 transition-all"
+                className="cursor-pointer bg-gradient-to-r from-[#f5576c] to-[#F7BB97] text-white shadow-lg shadow-[#f5576c]/30 hover:opacity-90 transition-all"
               >
                 <BookOpen className="w-4 h-4 mr-2" />
                 Get Started

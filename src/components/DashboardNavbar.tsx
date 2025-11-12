@@ -21,6 +21,7 @@ export default function DashboardNavbar({
   const navLinks = [
     { label: "Dashboard", href: "/dashboard" },
     { label: "Classes", href: "/dashboard/classes" },
+    { label: "Schedule", href: "/dashboard/schedule" },
     { label: "Students", href: "/dashboard/students" },
     { label: "Reports", href: "/dashboard/reports" },
   ];

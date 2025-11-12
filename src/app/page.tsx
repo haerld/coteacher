@@ -85,7 +85,7 @@ export default function HomePage() {
         >
           <button
             onClick={() => router.push("/auth/login")}
-            className="w-full sm:w-auto px-6 py-3 bg-white border border-[#f5576c] text-[#f5576c]
+            className=" w-full sm:w-auto px-6 py-3 bg-white border border-[#f5576c] text-[#f5576c]
                        font-semibold rounded-lg hover:bg-[#fff5f5] active:scale-95 transition"
           >
             Teacher
