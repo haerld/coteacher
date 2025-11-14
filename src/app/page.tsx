@@ -11,7 +11,6 @@ export default function HomePage() {
 
   if (loadingRedirect) return <div><Spinner /></div>;
 
-
   return (
     <div className="font-sans relative flex flex-col items-center justify-center min-h-screen bg-amber-50 px-4 sm:px-6 md:px-10 overflow-hidden">
       <div className="absolute inset-0 overflow-hidden pointer-events-none">
@@ -70,6 +69,7 @@ export default function HomePage() {
         >
           <button
             //onClick={() => router.push("/auth?mode=login")}
+            onClick={() => router.push("/student/scan")}
             className="w-full sm:w-auto px-6 py-3 bg-[#f5576c] text-white font-semibold rounded-lg
                        hover:bg-[#f7797d] active:scale-95 transition"
           >

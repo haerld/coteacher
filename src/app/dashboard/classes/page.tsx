@@ -25,7 +25,6 @@ export default function ClassesPage() {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState("");
 
-  // Updated form state
   const [formData, setFormData] = useState({
     classCode: "",
     className: "",
@@ -49,7 +48,6 @@ export default function ClassesPage() {
     if (userError || !user) throw new Error("Unable to fetch user. Please log in again.");
     setUser(user);
 
-    // ✅ Fetch all classes by teacher
     const { data: classesData, error: fetchError } = await supabase
       .from("classes")
       .select("*, students(count)")
@@ -58,7 +56,6 @@ export default function ClassesPage() {
 
     if (fetchError) throw fetchError;
 
-    // ✅ Format result
     const formatted = classesData.map((c: any) => ({
         id: c.id,
         class_code: c.class_code,
@@ -126,7 +123,6 @@ export default function ClassesPage() {
       throw new Error("Please fill in all fields");
     }
 
-    // ✅ Get current logged-in teacher
     const {
       data: { user },
       error: userError,
@@ -136,11 +132,9 @@ export default function ClassesPage() {
       throw new Error("Unable to retrieve user. Please log in again.");
     }
 
-    // ✅ Convert time to a format Supabase accepts ("HH:MM:SS")
     const formattedTimeStart = `${timeStart}:00`;
     const formattedTimeEnd = `${timeEnd}:00`;
 
-    // ✅ Insert into Supabase
     const { data, error: insertError } = await supabase
       .from("classes")
       .insert([
@@ -161,7 +155,6 @@ export default function ClassesPage() {
 
     if (insertError) throw insertError;
 
-    // ✅ Update local state
     setClasses((prev) => [data, ...prev]);
     setIsCreateModalOpen(false);
     setFormData({
@@ -191,7 +184,6 @@ export default function ClassesPage() {
   try {
     setIsLoading(true);
 
-    // ✅ Get the current user
     const {
       data: { user },
       error: userError,
@@ -201,7 +193,6 @@ export default function ClassesPage() {
       throw new Error("Unable to fetch user. Please log in again.");
     }
 
-    // ✅ Delete the class only if it belongs to this teacher
     const { error: deleteError } = await supabase
       .from("classes")
       .delete()
@@ -210,7 +201,6 @@ export default function ClassesPage() {
 
     if (deleteError) throw deleteError;
 
-    // ✅ Update UI after successful deletion
     setClasses((prev) => prev.filter((c) => c.id !== id));
 
     toast.success("Class deleted successfully!");
@@ -251,7 +241,7 @@ export default function ClassesPage() {
 
   return (
     <div className="relative min-h-screen bg-amber-50 overflow-hidden font-sans">
-      {/* Background blobs */}
+
       <div className="absolute inset-0 overflow-hidden pointer-events-none">
         <div className="absolute top-[-10%] left-[-10%] w-[400px] h-[400px] bg-[#f5576c]/30 rounded-full blur-3xl animate-blob1"></div>
         <div className="absolute bottom-[-10%] right-[-10%] w-[450px] h-[450px] bg-[#F7BB97]/25 rounded-full blur-3xl animate-blob2"></div>
@@ -260,7 +250,6 @@ export default function ClassesPage() {
 
       <DashboardNavbar user={user} onLogout={handleLogout} currentPage="Classes" />
 
-      {/* Main content */}
       <div className="relative mt-3 sm:mt-18 z-10 max-w-7xl mx-auto pt-24 p-4 sm:p-6 lg:p-8">
         <motion.div
           initial={{ opacity: 0, y: -20 }}
@@ -285,7 +274,6 @@ export default function ClassesPage() {
           </motion.button>
         </motion.div>
 
-        {/* Class Cards */}
         {isLoading && classes.length === 0 ? (
           <div className="flex items-center justify-center h-64">
             <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-[#f5576c]"></div>
@@ -354,7 +342,6 @@ export default function ClassesPage() {
         )}
       </div>
 
-      {/* Create Class Modal */}
       <AnimatePresence>
         {isCreateModalOpen && (
           <motion.div
@@ -373,7 +360,6 @@ export default function ClassesPage() {
               className="relative bg-white backdrop-blur-xl border border-[#f5576c]/20 rounded-2xl shadow-2xl 
                         w-full max-w-md md:max-w-lg p-6 sm:p-8 overflow-y-auto max-h-[90vh]"
             >
-              {/* Header */}
               <div className="flex items-center justify-between mb-6">
                 <h2 className="text-2xl font-bold bg-gradient-to-r from-[#f5576c] to-[#F7BB97] bg-clip-text text-transparent">
                   Create New Class
@@ -388,7 +374,6 @@ export default function ClassesPage() {
                 </motion.button>
               </div>
 
-              {/* Form */}
               <motion.form
                 onSubmit={handleCreateClass}
                 initial={{ opacity: 0, y: 20 }}
@@ -396,7 +381,7 @@ export default function ClassesPage() {
                 transition={{ delay: 0.1 }}
                 className="flex flex-col gap-4"
               >
-                {/* Class Code */}
+
                 <div className="flex flex-col">
                   <label className="text-sm font-medium text-gray-700 mb-1">Class Code</label>
                   <input
@@ -409,7 +394,6 @@ export default function ClassesPage() {
                   />
                 </div>
 
-                {/* Class Name */}
                 <div className="flex flex-col">
                   <label className="text-sm font-medium text-gray-700 mb-1">Class Name</label>
                   <input

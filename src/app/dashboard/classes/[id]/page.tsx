@@ -26,28 +26,11 @@ import jsPDF from "jspdf";
 import "jspdf-autotable";
 import { encrypt } from "@/lib/crypto";
 
-/**
- * ClassDetailsPage (fixed & enhanced)
- *
- * - Fixes pdf export (uses doc as any for autoTable)
- * - Shows cards for Present / Absent / Missing (for selected date & class)
- * - Shows teacher name instead of UID in attendance rows
- * - Stops scanner after successful scan, plays beep, and shows Sonner with student name
- * - Debounces duplicate scans
- * - Adds animations consistent with Dashboard
- * - Mobile responsive
- *
- * Notes:
- * - html5-qrcode requires HTTPS / localhost to access camera
- * - Ensure sonner is setup (toast provider) in your app layout
- */
-
 export default function ClassDetailsPage() {
   const params = useParams() as { id?: string };
   const classId = params?.id ?? "";
   const router = useRouter();
 
-  // state
   const [loading, setLoading] = useState(true);
   const [teacher, setTeacher] = useState<any | null>(null);
   const [classRow, setClassRow] = useState<any | null>(null);
@@ -59,19 +42,15 @@ export default function ClassDetailsPage() {
   const [scanModalOpen, setScanModalOpen] = useState(false);
   const scannerRef = useRef<Html5QrcodeScanner | null>(null);
 
-  // mini-list UI
   const [searchTerm, setSearchTerm] = useState("");
   const [filterClassCode, setFilterClassCode] = useState("All");
   const [sortType, setSortType] = useState("none");
 
-  // add student modal
   const [showAddModal, setShowAddModal] = useState(false);
   const [newStudent, setNewStudent] = useState({ name: "", class_id: classId || "" });
 
-  // prevent continuous scanning: store last scanned id + timestamp
   const lastScannedRef = useRef<Record<string, number>>({});
 
-  // realtime channel id
   const SUBS_CHANNEL = `class-${classId}-live`;
 
   const handleRowClick = (studentId: string) => {
@@ -79,12 +58,10 @@ export default function ClassDetailsPage() {
       router.push(`/dashboard/students/${encryptedId}`);
   };
 
-  // fetch all initial data
   const fetchAll = async () => {
     try {
       setLoading(true);
 
-      // auth check
       const { data: authData, error: authErr } = await supabase.auth.getUser();
       if (authErr || !authData?.user) {
         router.replace("/auth/login");
@@ -92,7 +69,6 @@ export default function ClassDetailsPage() {
       }
       const user = authData.user;
 
-      // teacher record (includes firstname/lastname)
       const { data: tData, error: tErr } = await supabase
         .from("teachers")
         .select("*")
@@ -105,7 +81,6 @@ export default function ClassDetailsPage() {
       }
       setTeacher(tData);
 
-      // fetch class (ensure teacher owns it)
       const { data: cData, error: cErr } = await supabase
         .from("classes")
         .select("*")
@@ -120,7 +95,6 @@ export default function ClassDetailsPage() {
       }
       setClassRow(cData);
 
-      // fetch students
       const { data: sData, error: sErr } = await supabase
         .from("students")
         .select("*")
@@ -129,7 +103,6 @@ export default function ClassDetailsPage() {
 
       setStudents(sErr ? [] : sData || []);
 
-      // fetch attendance for date
       await fetchAttendanceForDate(attendanceDate);
     } catch (err: any) {
       console.error("fetchAll err", err);
@@ -171,7 +144,6 @@ export default function ClassDetailsPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [classId]);
 
-  // fetch attendance and map marked_by teacher names
   async function fetchAttendanceForDate(dateISO: string) {
     try {
       const dateOnly = dateISO; // YYYY-MM-DD
@@ -190,7 +162,6 @@ export default function ClassDetailsPage() {
 
       const rows = data || [];
 
-      // collect unique marked_by ids to fetch their names
       const markedIds = Array.from(new Set(rows.map((r: any) => r.marked_by).filter(Boolean)));
       let teacherMap: Record<string, string> = {};
       if (markedIds.length > 0) {
@@ -206,7 +177,6 @@ export default function ClassDetailsPage() {
         }
       }
 
-      // set display name on each row
       const enriched = rows.map((r: any) => ({
         ...r,
         marked_by_name: r.marked_by ? teacherMap[r.marked_by] ?? r.marked_by : "—",
@@ -219,19 +189,15 @@ export default function ClassDetailsPage() {
     }
   }
 
-  // scanning success callback
   const onScanSuccess = async (decodedText: string) => {
-    // debounce / prevent duplicates: if same token scanned within 3 seconds, ignore
     const token = decodedText;
     const now = Date.now();
     if (lastScannedRef.current[token] && now - lastScannedRef.current[token] < 3000) {
-      return; // ignore duplicate within 3s
+      return;
     }
     lastScannedRef.current[token] = now;
 
-    // Try to find student by qr_token (exact).
     try {
-      // First try raw token
       const { data: studentMatch, error: studentErr } = await supabase
         .from("students")
         .select("*")
@@ -241,12 +207,10 @@ export default function ClassDetailsPage() {
 
       let studentFound = studentMatch;
 
-      // If not found, support legacy format "STUDENT:Name|CLASS:CODE"
       if (!studentFound && token.includes("STUDENT:") && token.includes("CLASS:")) {
         const parsed = parseLegacyQrFormat(token);
         if (parsed) {
           const { name, classCode } = parsed;
-          // find class by code in this teacher's classes
           const { data: classByCode } = await supabase
             .from("classes")
             .select("id")
@@ -273,12 +237,10 @@ export default function ClassDetailsPage() {
         return;
       }
 
-      // Insert attendance record (prevent duplicate same student same date/time if needed)
       const nowDate = new Date();
       const dateOnly = nowDate.toISOString().slice(0, 10);
       const timeOnly = nowDate.toTimeString().slice(0, 8); // HH:MM:SS
 
-      // Optional: check if attendance for this student & date already exists to prevent duplicates
       const { data: existing } = await supabase
         .from("attendance")
         .select("id")
@@ -289,12 +251,9 @@ export default function ClassDetailsPage() {
         .single();
 
       if (existing) {
-        // Already marked for today
-        // Provide feedback (sonner) and stop scanner to avoid continuous scanning
         playBeep();
         toast("Already marked present for today: " + studentFound.name);
 
-        // refresh attendance for date
         await fetchAttendanceForDate(attendanceDate);
         return;
       }
@@ -319,11 +278,9 @@ export default function ClassDetailsPage() {
         return;
       }
 
-      // success -> beep, show sonner with student name, stop scanner briefly to avoid continuous scans
       playBeep();
       toast.success(`Marked attendance: ${studentFound.name}`);
 
-      // refresh attendance
       await fetchAttendanceForDate(attendanceDate);
     } catch (err: any) {
       console.error("scan processing err", err);
@@ -344,7 +301,6 @@ export default function ClassDetailsPage() {
     return null;
   }
 
-  // initialize scanner when modal is open
   useEffect(() => {
     if (!scanModalOpen) {
       if (scannerRef.current) {
@@ -394,14 +350,13 @@ export default function ClassDetailsPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [scanModalOpen]);
 
-  // beep sound using WebAudio API
   function playBeep() {
     try {
       const ctx = new (window.AudioContext || (window as any).webkitAudioContext)();
       const o = ctx.createOscillator();
       const g = ctx.createGain();
       o.type = "sine";
-      o.frequency.value = 880; // A5
+      o.frequency.value = 880;
       g.gain.value = 0.05;
       o.connect(g);
       g.connect(ctx.destination);
@@ -417,7 +372,6 @@ export default function ClassDetailsPage() {
     }
   }
 
-  // Export attendance rows to Excel
   const exportToExcel = () => {
     if (!attendanceRows || attendanceRows.length === 0) {
       toast.error("No attendance to export");
@@ -515,7 +469,6 @@ export default function ClassDetailsPage() {
     }
   };
 
-  // Add student in this class
   const handleAddStudent = async () => {
     if (!newStudent.name || !newStudent.class_id) {
       toast.error("Enter student name & class");
@@ -543,7 +496,6 @@ export default function ClassDetailsPage() {
     }
   };
 
-  // Delete attendance row
   const handleDeleteAttendanceRow = async (id: string) => {
     if (!confirm("Delete this attendance entry?")) return;
     try {
@@ -557,18 +509,14 @@ export default function ClassDetailsPage() {
     }
   };
 
-  // compute summary cards: present, absent, missing (for selected date/class)
   const summary = useMemo(() => {
     const present = attendanceRows.length;
     const totalStudents = students.length;
     const absent = Math.max(0, totalStudents - present);
-    // missing activities count for class: count student_activities where student belongs to this class and status='missing'
-    // We'll compute by fetching counts - but to keep it fast, compute locally by querying student_activities for class students:
-    // For simplicity here, we'll set missing to 0 and fetch separately below
+
     return { present, absent, totalStudents, missing: 0 };
   }, [attendanceRows, students]);
 
-  // fetch missing activities count for all students in this class
   useEffect(() => {
     const fetchMissingCount = async () => {
       try {
@@ -581,7 +529,6 @@ export default function ClassDetailsPage() {
           .eq("status", "missing");
 
         if (!missingErr && Array.isArray(missingRows)) {
-          // update summary missing via state by setting attendanceRows? we'll keep a separate state instead
           setMissingCount(missingRows.length);
         } else {
           setMissingCount(0);
@@ -596,7 +543,6 @@ export default function ClassDetailsPage() {
 
   const [missingCount, setMissingCount] = useState(0);
 
-  // enriched students for mini-list
   const enrichedStudents = useMemo(() => {
     const attendanceMap: Record<string, number> = {};
     attendanceRows.forEach((r) => {
@@ -609,13 +555,11 @@ export default function ClassDetailsPage() {
     }));
   }, [students, attendanceRows]);
 
-  // filtered mini-list
   const filteredStudents = useMemo(() => {
     let list = [...enrichedStudents];
     if (searchTerm.trim() !== "") {
       list = list.filter((s) => s.name.toLowerCase().includes(searchTerm.toLowerCase()));
     }
-    // filterClassCode isn't very meaningful in a single-class page; kept for parity
     if (filterClassCode.toLowerCase() !== "all") {
       list = list.filter((s) => (classRow?.class_code || "").toLowerCase() === filterClassCode.toLowerCase());
     }
@@ -646,13 +590,12 @@ export default function ClassDetailsPage() {
     );
   }
 
-  // Motion variants (consistent with Dashboard)
   const container = { hidden: { opacity: 0, y: 10 }, show: { opacity: 1, y: 0, transition: { staggerChildren: 0.05 } } };
   const item = { hidden: { opacity: 0, y: 8 }, show: { opacity: 1, y: 0 } };
 
   return (
     <div className="relative min-h-screen bg-amber-50 overflow-hidden font-sans">
-      {/* Background blobs */}
+
       <div className="absolute inset-0 overflow-hidden pointer-events-none">
         <div className="absolute top-[-10%] left-[-10%] w-[400px] h-[400px] bg-[#f5576c]/30 rounded-full blur-3xl animate-blob1"></div>
         <div className="absolute bottom-[-10%] right-[-10%] w-[450px] h-[450px] bg-[#F7BB97]/25 rounded-full blur-3xl animate-blob2"></div>
@@ -694,21 +637,19 @@ export default function ClassDetailsPage() {
                 setShowAddModal(true);
                 setNewStudent({ name: "", class_id: classId });
               }}
-              className="shadow-lg shadow-[#f5576c]/30 hover:opacity-90 transition-all cursor-pointer px-3 py-2 rounded-xl bg-white/70 backdrop-blur-md border border-[#f5576c]/20 text-[#f5576c] font-medium shadow"
+              className="shadow-lg shadow-[#f5576c]/30 hover:opacity-90 transition-all cursor-pointer px-3 py-2 rounded-xl bg-white/70 backdrop-blur-md border border-[#f5576c]/20 text-[#f5576c] font-medium"
             >
               <UserPlus className="w-4 h-4 inline-block mr-1" /> Add Student
             </motion.button>
           </div>
         </div>
 
-        {/* Summary cards */}
         <motion.div initial="hidden" animate="show" variants={container} className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
           <StatCard title="Present" value={summary.present} subtitle="students" icon={CalendarCheck} color="from-green-400 to-green-600" />
           <StatCard title="Total Absences" value={summary.absent} subtitle="students" icon={CalendarCheck} color="from-orange-400 to-orange-600"/>
           <StatCard title="Missing Activities" value={missingCount} subtitle="pending submissions" icon={ClipboardX} color="from-red-400 to-red-600" />
         </motion.div>
 
-        {/* Attendance list */}
         <div className="bg-white/70 backdrop-blur-md rounded-2xl p-4 border border-[#f5576c]/20 shadow-lg mb-6">
           <h2 className="font-semibold text-gray-800 mb-3">Attendance — {attendanceDate}</h2>
           {attendanceRows.length === 0 ? (
@@ -743,7 +684,6 @@ export default function ClassDetailsPage() {
           )}
         </div>
 
-        {/* Controls */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 mb-6">
           <div className="bg-white/70 backdrop-blur-md rounded-2xl p-4 border border-[#f5576c]/20 shadow-lg flex items-center gap-3">
             <Calendar className="w-5 h-5 text-[#f5576c]" />
@@ -777,7 +717,6 @@ export default function ClassDetailsPage() {
           </div>
         </div>
 
-        {/* Mini Students list */}
         <div className="bg-white/70 backdrop-blur-md rounded-2xl p-4 border border-[#f5576c]/20 shadow-lg">
           <div className="flex items-center justify-between mb-4">
             <h3 className="font-semibold text-gray-800">Students</h3>
@@ -839,7 +778,6 @@ export default function ClassDetailsPage() {
         </div>
       </div>
 
-      {/* Scan Modal */}
       <AnimatePresence>
         {scanModalOpen && (
           <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 z-50 bg-black/50 p-4 flex items-center justify-center">
@@ -855,7 +793,6 @@ export default function ClassDetailsPage() {
         )}
       </AnimatePresence>
 
-      {/* Add Student Modal */}
       <AnimatePresence>
         {showAddModal && (
           <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 z-50 bg-black/50 p-4 flex items-center justify-center">

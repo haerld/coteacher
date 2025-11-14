@@ -11,25 +11,13 @@ import {
   Trash2,
   X,
   CalendarCheck,
+  ChevronRight,
 } from "lucide-react";
 import { QRCodeCanvas } from "qrcode.react";
 import { decrypt } from "@/lib/crypto";
 import DashboardNavbar from "@/components/DashboardNavbar";
 import { supabase } from "@/lib/supabaseClient";
 import { toast } from "sonner";
-
-/**
- * Student Details Page
- *
- * - Expects route param `eid` (encrypted student id)
- * - Decrypts using NEXT_PUBLIC_CRYPTO_KEY
- * - Fetches student, student's class, missing activities (status = 'missing')
- * - Edit student name & class via modal (Sonner toasts)
- * - Add missing activity (activity_title, activity_description)
- * - QR code generated from student.qr_token with download option
- *
- * Note: For production security, decrypt IDs on server-side.
- */
 
 export default function StudentDetailsPage() {
   const params = useParams() as { eid?: string };
@@ -44,12 +32,13 @@ export default function StudentDetailsPage() {
   const [classes, setClasses] = useState<any[]>([]);
   const [missingActivities, setMissingActivities] = useState<any[]>([]);
 
-  // UI
   const [isEditOpen, setIsEditOpen] = useState(false);
   const [editForm, setEditForm] = useState({ name: "", class_id: "" });
 
   const [isAddActivityOpen, setIsAddActivityOpen] = useState(false);
   const [newActivity, setNewActivity] = useState({ title: "", description: "" });
+
+  const [expandedId, setExpandedId] = useState<string | null>(null);
 
   useEffect(() => {
  
@@ -57,7 +46,6 @@ export default function StudentDetailsPage() {
       setLoading(true);
 
       try {
-        // 1. Auth user
         const { data: authData, error: authError } = await supabase.auth.getUser();
         if (authError || !authData?.user) {
           router.replace("/auth/login");
@@ -65,7 +53,6 @@ export default function StudentDetailsPage() {
         }
         const user = authData.user;
 
-        // 2. teacher record
         const { data: tData, error: tErr } = await supabase
           .from("teachers")
           .select("*")
@@ -79,7 +66,6 @@ export default function StudentDetailsPage() {
         }
         setTeacher(tData);
 
-        // 3. decrypt eid
         if (!eid) {
           toast.error("No student specified");
           router.push("/dashboard/students");
@@ -118,7 +104,6 @@ export default function StudentDetailsPage() {
         setStudent(sData);
         setEditForm({ name: sData.name || "", class_id: sData.class_id || "" });
 
-        // 6. fetch missing activities
         const { data: mData, error: mErr } = await supabase
           .from("student_activities")
           .select("*")
@@ -139,7 +124,6 @@ export default function StudentDetailsPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [eid]);
 
-  // helper: refresh missing activities and student
   const refreshData = async () => {
     if (!student?.id) return;
     setLoading(true);
@@ -170,7 +154,6 @@ export default function StudentDetailsPage() {
     }
   };
 
-  // Edit student (name + class)
   const handleSaveEdit = async () => {
     if (!editForm.name || !editForm.class_id) {
       toast.error("Please provide name and class");
@@ -198,7 +181,6 @@ export default function StudentDetailsPage() {
     }
   };
 
-  // Add missing activity
   const handleAddMissingActivity = async () => {
     if (!newActivity.title) {
       toast.error("Please provide activity title");
@@ -232,7 +214,6 @@ export default function StudentDetailsPage() {
     }
   };
 
-  // Delete missing activity
   const handleDeleteMissing = async (id: string) => {
     if (!confirm("Delete this missing activity?")) return;
     try {
@@ -249,31 +230,66 @@ export default function StudentDetailsPage() {
     }
   };
 
-  // Download QR as PNG using QRCodeCanvas
-  const downloadQr = () => {
-    try {
-      // The qr renders in canvas; qrcode.react renders a canvas element
-      // We find the canvas in the DOM
-      const canvas = document.querySelector<HTMLCanvasElement>("#student-qr canvas");
-      if (!canvas) {
-        toast.error("QR not ready");
-        return;
-      }
-      const dataUrl = canvas.toDataURL("image/png");
-      const link = document.createElement("a");
-      const safeName = (student?.name || "student").replace(/\s+/g, "_");
-      const safeCode = (student?.classes?.class_code || "class").replace(/\s+/g, "_");
-      link.download = `${safeName}_${safeCode}.png`;
-      link.href = dataUrl;
-      link.click();
-      toast.success("QR downloaded");
-    } catch (err) {
-      console.error("download qr", err);
-      toast.error("Failed to download QR");
-    }
-  };
+  function stripHTML(html: string) {
+    const tmp = typeof window !== "undefined" ? document.createElement("div") : null;
+    if (!tmp) return html;
+    tmp.innerHTML = html;
+    return tmp.textContent || tmp.innerText || "";
+  }
 
-  // UX guards
+  const downloadQr = () => {
+  try {
+    const originalCanvas = document.querySelector<HTMLCanvasElement>("#student-qr canvas");
+    if (!originalCanvas) {
+      toast.error("QR not ready");
+      return;
+    }
+
+    const studentName = student?.name || 'Student Name';
+    const fontSize = 15; 
+    const padding = 5;
+
+    const newCanvas = document.createElement("canvas");
+    const ctx = newCanvas.getContext("2d");
+
+    if (!ctx) {
+      toast.error("Failed to create canvas");
+      return;
+    }
+
+    newCanvas.width = originalCanvas.width;
+    newCanvas.height = originalCanvas.height + fontSize + (padding * 2);
+
+    ctx.fillStyle = "#ffffff";
+    ctx.fillRect(0, 0, newCanvas.width, newCanvas.height);
+
+    ctx.drawImage(originalCanvas, 0, 0);
+
+    ctx.fillStyle = "#000000"; 
+    ctx.font = `${fontSize}px Arial`;
+    ctx.textAlign = "center";
+    ctx.textBaseline = "top";
+
+    const textX = newCanvas.width / 2;
+    const textY = originalCanvas.height + padding;
+    ctx.fillText(studentName, textX, textY);
+
+    const dataUrl = newCanvas.toDataURL("image/png");
+    const link = document.createElement("a");
+    const safeName = (student?.name || "student").replace(/\s+/g, "_");
+    const safeCode = (student?.classes?.class_code || "class").replace(/\s+/g, "_");
+    link.download = `${safeName}_${safeCode}.png`;
+    link.href = dataUrl;
+    link.click();
+
+    toast.success("QR downloaded");
+
+  } catch (err) {
+    console.error("download qr", err);
+    toast.error("Failed to download QR");
+  }
+};
+
   if (loading && !student) {
     return (
       <div className="flex items-center justify-center h-64">
@@ -284,7 +300,6 @@ export default function StudentDetailsPage() {
 
   return (
     <div className="relative min-h-screen bg-amber-50 overflow-hidden font-sans">
-      {/* Background Effects */}
       <div className="absolute inset-0 overflow-hidden pointer-events-none">
         <div className="absolute top-[-10%] left-[-10%] w-[400px] h-[400px] bg-[#f5576c]/30 rounded-full blur-3xl animate-blob1"></div>
         <div className="absolute bottom-[-10%] right-[-10%] w-[450px] h-[450px] bg-[#F7BB97]/25 rounded-full blur-3xl animate-blob2"></div>
@@ -321,10 +336,8 @@ export default function StudentDetailsPage() {
           </div>
         </div>
 
-        {/* Main Columns */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          {/* Left column: QR & basic info */}
-          <div className="col-span-1 bg-white/70 backdrop-blur-md rounded-2xl p-6 border border-[#f5576c]/20 shadow-lg">
+          <div className="col-span-1 bg-white/70 backdrop-blur-md rounded-2xl p-6 border h-96 border-[#f5576c]/20 shadow-lg">
             <div className="flex flex-col items-center">
               <div id="student-qr" className="mb-4">
                 <QRCodeCanvas
@@ -353,7 +366,6 @@ export default function StudentDetailsPage() {
             </div>
           </div>
 
-          {/* Middle column: Missing activities */}
           <div className="col-span-1 lg:col-span-2">
             <div className="flex items-center justify-between mb-4">
               <h2 className="text-lg font-semibold text-gray-800">Missing Activities</h2>
@@ -368,25 +380,70 @@ export default function StudentDetailsPage() {
                 <div className="py-8 text-center text-gray-500">No missing activities</div>
               ) : (
                 <ul className="space-y-3">
-                  {missingActivities.map((a) => (
-                    <li key={a.id} className="p-4 rounded-lg border border-gray-100 hover:shadow transition flex flex-col sm:flex-row sm:items-start justify-between">
-                      <div className="flex-1">
-                        <div className="flex items-center justify-between gap-4">
-                          <h3 className="font-semibold text-gray-800">{a.activity_title || "Untitled Activity"}</h3>
-                          <div className="text-sm text-gray-500">{a.created_at ? new Date(a.created_at).toLocaleDateString() : ""}</div>
+                  {missingActivities.map((a, idx) => (
+                    <motion.div
+                  key={a.id}
+                  initial={{ opacity: 0, y: 8 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: idx * 0.03 }}
+                  className="group bg-white/70 backdrop-blur-md rounded-2xl shadow-lg p-4 border border-[#f5576c]/10"
+                >
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="flex-1 min-w-0" onClick={() => router.push(`/dashboard/activities/${a.activity_id}`)}>
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <h3 className="text-lg font-semibold text-gray-800 mt-1 truncate">{a.activity_title}</h3>
                         </div>
-                        {a.activity_description && <p className="text-sm text-gray-600 mt-2">{a.activity_description}</p>}
+                        <div className="text-sm text-red-600 ml-3">
+                          Deadline: {a.deadline ? new Date(a.deadline).toLocaleString() : "No deadline"}
+                        </div>
                       </div>
+                    </div>
 
-                      <div className="mt-3 sm:mt-0 sm:ml-4 flex items-center gap-2">
-                        <button onClick={() => handleDeleteMissing(a.id)} className="px-3 py-2 rounded-lg bg-white border border-red-100 text-red-600 hover:bg-red-50">
-                          <Trash2 className="w-4 h-4" />
-                        </button>
-                        <button onClick={() => toast("done feature coming soon")} className="px-3 py-2 rounded-lg bg-white border border-[#f5576c]/10">
-                          <CalendarCheck className="w-4 h-4 text-[#f5576c]" />
-                        </button>
-                      </div>
-                    </li>
+                    <div className="flex flex-col items-center gap-2 ml-3">
+                      <button
+                        onClick={() => setExpandedId(expandedId === a.id ? null : a.id)}
+                        aria-expanded={expandedId === a.id}
+                        className="p-2 rounded-md hover:bg-gray-100"
+                      >
+                        <ChevronRight
+                          className={`w-5 h-5 text-gray-500 transform transition ${expandedId === a.id ? "rotate-90" : ""}`}
+                        />
+                      </button>
+                    </div>
+                  </div>
+
+                  <AnimatePresence>
+                    {expandedId === a.id && (
+                      <motion.div
+                        initial={{ opacity: 0, height: 0 }}
+                        animate={{ opacity: 1, height: "auto" }}
+                        exit={{ opacity: 0, height: 0 }}
+                        className="mt-3 border-t pt-3 text-sm text-gray-700"
+                      >
+                        <div dangerouslySetInnerHTML={{ __html: a.activity_description }} />
+                        {a.activity_submission_link ? (
+                        <p className="text-gray-700 font-normal mt-2">
+                            Submission Link:{" "}
+                            <a 
+                            href={a.submission_link} 
+                            target="_blank" 
+                            rel="noopener noreferrer" 
+                            className="text-[#f5576c] hover:underline"
+                            >
+                            Click here to submit
+                            </a>
+                        </p>
+                        ) : (<p className="text-gray-700 font-normal mt-2">
+                            Submission Link: <i>No submission link provided.</i>
+                        </p>)}
+                        <div className="mt-2">
+                          <button onClick={() => router.push(`/dashboard/activities/${a.activity_id}`)} className="text-sm text-[#f5576c] hover:underline">Open details</button>
+                        </div>
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
+                </motion.div>
                   ))}
                 </ul>
               )}
@@ -395,7 +452,6 @@ export default function StudentDetailsPage() {
         </div>
       </div>
 
-      {/* Edit Modal */}
       <AnimatePresence>
         {isEditOpen && (
           <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 z-50 bg-black/50 p-4 flex items-center justify-center">
@@ -429,7 +485,6 @@ export default function StudentDetailsPage() {
         )}
       </AnimatePresence>
 
-      {/* Add Missing Activity Modal */}
       <AnimatePresence>
         {isAddActivityOpen && (
           <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 z-50 bg-black/50 p-4 flex items-center justify-center">

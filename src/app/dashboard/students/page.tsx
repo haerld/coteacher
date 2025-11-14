@@ -17,32 +17,12 @@ import { supabase } from "@/lib/supabaseClient";
 import { toast } from "sonner";
 import { encrypt } from "@/lib/crypto";
 
-/**
- * StudentsPage
- *
- * Features:
- * - Fetch classes for the logged-in teacher and show them in Add Student dropdown
- * - Fetch students (with class) for that teacher
- * - Compute attendance_count (count rows in `attendance` for student)
- * - Compute missing_activities (count rows in `student_activities` with status='missing')
- * - Search, filter by class code, sort by missing/absences, add/delete students
- * - Clicking a row navigates to /dashboard/students/[id]
- *
- * NOTE about "absences":
- * - The schema does not include a present/absent flag or a canonical "total sessions".
- * - We compute attendance_count exactly; for "absences" sorting, we infer a relative absences
- *   as: absences_score = maxAttendanceAcrossStudents - attendance_count.
- *   This produces a relative ordering for "most absent" vs "least absent".
- * - Replace with a stricter calculation when you record present/absent status or total sessions.
- */
-
 export default function StudentsPage() {
   const router = useRouter();
   const [user, setUser] = useState<any>(null);
   const [teacher, setTeacher] = useState<any>(null);
   const [loading, setLoading] = useState(true);
 
-  // Data
   const [classes, setClasses] = useState<any[]>([]);
   const [students, setStudents] = useState<
     {
@@ -59,7 +39,6 @@ export default function StudentsPage() {
     }[]
   >([]);
 
-  // UI state
   const [searchTerm, setSearchTerm] = useState("");
   const [filterClassCode, setFilterClassCode] = useState("All");
   const [sortType, setSortType] = useState("none");
@@ -69,12 +48,10 @@ export default function StudentsPage() {
     class_id: "",
   });
 
-  // Fetch initial user, teacher, classes, students + counts
   const fetchAll = async () => {
     try {
       setLoading(true);
 
-      // 1) get auth user
       const { data: authData, error: authError } = await supabase.auth.getUser();
       if (authError || !authData?.user) {
         router.replace("/auth/login");
@@ -83,7 +60,6 @@ export default function StudentsPage() {
       const user = authData.user;
       setUser(user);
 
-      // 2) get teacher record
       const { data: teacherData, error: teacherError } = await supabase
         .from("teachers")
         .select("*")
@@ -97,7 +73,6 @@ export default function StudentsPage() {
       }
       setTeacher(teacherData);
 
-      // 3) fetch classes for this teacher
       const { data: classesData, error: classesError } = await supabase
         .from("classes")
         .select("*")
@@ -106,13 +81,10 @@ export default function StudentsPage() {
 
       if (classesError) {
         console.error("Error fetching classes:", classesError);
-        // don't return — we can still show students if any
       } else {
         setClasses(classesData || []);
       }
 
-      // 4) fetch students for this teacher's classes
-      // We assume students.class_id points to classes.id
       const classIds = (classesData || []).map((c: any) => c.id);
       let studentsData: any[] = [];
 
@@ -128,25 +100,19 @@ export default function StudentsPage() {
           studentsData = sData || [];
         }
       } else {
-        // no classes yet -> no students
         studentsData = [];
       }
 
-      // 5) For each student compute attendance_count and missing_count
-      // Optimize by querying attendance and student_activities counts in bulk
       const studentIds = studentsData.map((s) => s.id);
       const attendanceCounts: Record<string, number> = {};
       const missingCounts: Record<string, number> = {};
 
       if (studentIds.length > 0) {
-        // attendance counts
         const { data: attData, error: attError } = await supabase
           .from("attendance")
           .select("student_id", { count: "exact" })
           .in("student_id", studentIds);
 
-        // Supabase with .select("student_id, count:exact") doesn't return grouped count;
-        // so we fetch all attendance rows for these students and count locally:
         const { data: attRows, error: attRowsError } = await supabase
           .from("attendance")
           .select("student_id")
@@ -158,7 +124,6 @@ export default function StudentsPage() {
           });
         }
 
-        // missing activity counts
         const { data: missingRows, error: missingRowsError } = await supabase
           .from("student_activities")
           .select("student_id")
@@ -172,7 +137,6 @@ export default function StudentsPage() {
         }
       }
 
-      // Format student rows
       const formatted = studentsData.map((s: any) => ({
         id: s.id,
         name: s.name,
@@ -198,7 +162,6 @@ export default function StudentsPage() {
   useEffect(() => {
     fetchAll();
 
-    // Realtime subscriptions: refresh on changes to relevant tables
     const channel = supabase
       .channel("students-live")
       .on(
@@ -229,8 +192,6 @@ export default function StudentsPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Derived: find max attendance to infer "absences score" (relative)
-
   const handleRowClick = (studentId: string) => {
     const encryptedId = encrypt(studentId);
     router.push(`/dashboard/students/${encryptedId}`);
@@ -241,7 +202,6 @@ export default function StudentsPage() {
     return Math.max(...students.map((s) => s.attendance_count || 0));
   }, [students]);
 
-  // Filtered + Sorted students
   const filteredStudents = useMemo(() => {
     let list = [...students];
 
@@ -264,7 +224,7 @@ export default function StudentsPage() {
       case "leastMissing":
         list.sort((a, b) => (a.missing_count || 0) - (b.missing_count || 0));
         break;
-      // For absences we use a relative "absences score" = maxAttendance - attendance_count
+
       case "mostAbsent":
         list.sort(
           (a, b) =>
@@ -286,7 +246,6 @@ export default function StudentsPage() {
     return list;
   }, [students, searchTerm, filterClassCode, sortType, maxAttendance]);
 
-  // Add student
   const handleAddStudent = async () => {
     if (!newStudent.name || !newStudent.class_id) {
       toast.error("Please provide student name and class.");
@@ -296,7 +255,6 @@ export default function StudentsPage() {
     try {
       setLoading(true);
 
-      // generate a qr token for the student (simple random string)
       const qrToken = crypto.randomUUID?.() ?? Math.random().toString(36).slice(2);
 
       const { data, error } = await supabase
@@ -314,10 +272,8 @@ export default function StudentsPage() {
       if (error || !data) throw error || new Error("Failed to add student");
 
       toast.success("Student added successfully!");
-      // reset form & close
       setNewStudent({ name: "", class_id: "" });
       setShowModal(false);
-      // refresh list
       fetchAll();
     } catch (err: any) {
       console.error("add student error:", err);
@@ -327,7 +283,6 @@ export default function StudentsPage() {
     }
   };
 
-  // Delete student
   const handleDelete = async (id: string) => {
     if (!confirm("Are you sure you want to delete this student?")) return;
 
@@ -366,7 +321,7 @@ export default function StudentsPage() {
 
   return (
     <div className="relative min-h-screen bg-amber-50 overflow-hidden font-sans">
-      {/* Background blobs */}
+ 
       <div className="absolute inset-0 overflow-hidden pointer-events-none">
         <div className="absolute top-[-10%] left-[-10%] w-[400px] h-[400px] bg-[#f5576c]/30 rounded-full blur-3xl animate-blob1"></div>
         <div className="absolute bottom-[-10%] right-[-10%] w-[450px] h-[450px] bg-[#F7BB97]/25 rounded-full blur-3xl animate-blob2"></div>
@@ -376,7 +331,7 @@ export default function StudentsPage() {
       <DashboardNavbar user={teacher || user} onLogout={handleLogout} currentPage="Students" />
 
       <div className="relative sm:mt-18 z-10 max-w-7xl mx-auto pt-24 p-4 sm:p-6 lg:p-8">
-        {/* Header */}
+
         <motion.div
           initial={{ opacity: 0, y: -20 }}
           animate={{ opacity: 1, y: 0 }}
@@ -400,7 +355,6 @@ export default function StudentsPage() {
           </motion.button>
         </motion.div>
 
-        {/* Filters */}
         <motion.div
           initial={{ opacity: 0, y: 15 }}
           animate={{ opacity: 1, y: 0 }}
@@ -456,7 +410,6 @@ export default function StudentsPage() {
           </div>
         </motion.div>
 
-        {/* Student Table */}
         <motion.div className="overflow-x-auto rounded-2xl shadow-lg border border-[#f5576c]/20 bg-white/70 backdrop-blur-md">
           <table className="w-full text-left text-sm text-gray-700">
             <thead className="bg-gradient-to-r from-[#f5576c]/10 to-[#F7BB97]/10 font-semibold">
@@ -525,7 +478,6 @@ export default function StudentsPage() {
         )}
       </div>
 
-      {/* Add Student Modal */}
       {showModal && (
         <div className="fixed inset-0 flex items-center justify-center bg-black/50 z-50 px-4">
           <motion.div

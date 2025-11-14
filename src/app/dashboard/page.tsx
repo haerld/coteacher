@@ -36,7 +36,6 @@ export default function DashboardPage() {
     const fetchTeacherData = async () => {
       setLoading(true);
 
-      // Step 1: Get authenticated user
       const { data: authData, error: authError } = await supabase.auth.getUser();
       if (authError || !authData?.user) {
         router.replace("/auth/login");
@@ -45,7 +44,6 @@ export default function DashboardPage() {
 
       const user = authData.user;
 
-      // Step 2: Fetch teacher record
       const { data: teacherData, error: teacherError } = await supabase
         .from("teachers")
         .select("*")
@@ -60,7 +58,6 @@ export default function DashboardPage() {
 
       setTeacher(teacherData);
 
-      // Step 3: Fetch teacher’s classes
       const { data: classes, error: classError } = await supabase
         .from("classes")
         .select("id, class_name")
@@ -70,12 +67,10 @@ export default function DashboardPage() {
         console.error("Error fetching classes:", classError);
       }
 
-      // Step 4: Fetch attendance summary (mock for now)
       const { data: attendance, error: attendanceError } = await supabase
         .from("attendance")
         .select("date, class_id");
 
-      // Example grouping: count attendance per day
       let attendanceSummary = [];
       if (attendance && attendance.length > 0) {
         const grouped = attendance.reduce((acc: any, row: any) => {
@@ -88,7 +83,7 @@ export default function DashboardPage() {
         attendanceSummary = Object.keys(grouped).map((day) => ({
           day,
           attendance: grouped[day],
-          absents: Math.floor(Math.random() * 5), // Placeholder until you calculate actual absences
+          absents: Math.floor(Math.random() * 5),
         }));
       } else {
         // Default static fallback
@@ -103,7 +98,6 @@ export default function DashboardPage() {
 
       setData(attendanceSummary);
 
-      // Step 5: Fetch missing activities count
       const { data: missing, error: missingError } = await supabase
         .from("student_activities")
         .select("id", { count: "exact" })
@@ -163,7 +157,7 @@ export default function DashboardPage() {
 
   return (
     <div className="relative min-h-screen bg-amber-50 overflow-hidden font-sans">
-      {/* Background Effects */}
+
       <div className="absolute inset-0 overflow-hidden pointer-events-none">
         <div className="absolute top-[-10%] left-[-10%] w-[400px] h-[400px] bg-[#f5576c]/30 rounded-full blur-3xl animate-blob1"></div>
         <div className="absolute bottom-[-10%] right-[-10%] w-[450px] h-[450px] bg-[#F7BB97]/25 rounded-full blur-3xl animate-blob2"></div>
@@ -176,9 +170,8 @@ export default function DashboardPage() {
         currentPage="Dashboard"
       />
 
-      {/* Main Content */}
       <div className="relative z-10 mt-3 sm:mt-18 max-w-7xl mx-auto pt-24 p-4 sm:p-6 lg:p-8 flex flex-col gap-6">
-        {/* Welcome Section */}
+
         <motion.div
           initial={{ opacity: 0, y: -20 }}
           animate={{ opacity: 1, y: 0 }}
@@ -198,7 +191,6 @@ export default function DashboardPage() {
           </p>
         </motion.div>
 
-        {/* Stats */}
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
@@ -210,7 +202,6 @@ export default function DashboardPage() {
           <StatCard title="Missing Activities" value={totalMissingActivities} subtitle="pending submissions" icon={ClipboardX} color="from-red-400 to-red-600" />
         </motion.div>
 
-        {/* Chart */}
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
@@ -235,7 +226,6 @@ export default function DashboardPage() {
           </ResponsiveContainer>
         </motion.div>
 
-        {/* Quick Actions */}
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
@@ -253,7 +243,6 @@ export default function DashboardPage() {
   );
 }
 
-// --- Reusable Components ---
 function StatCard({ title, value, subtitle, icon: Icon, color }: any) {
   return (
     <div className="bg-white/70 backdrop-blur-md rounded-2xl shadow-lg p-6 border border-[#f5576c]/20 hover:shadow-xl transition">

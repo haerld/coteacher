@@ -23,12 +23,11 @@ export default function DashboardNavbar({
     { label: "Classes", href: "/dashboard/classes" },
     { label: "Schedule", href: "/dashboard/schedule" },
     { label: "Students", href: "/dashboard/students" },
-    { label: "Reports", href: "/dashboard/reports" },
+    { label: "Activities", href: "/dashboard/activities" },
   ];
 
   const handleNavigation = (href: string) => {
     setIsMobileMenuOpen(false);
-    // In your actual app, use router.push(href)
     console.log(`Navigate to ${href}`);
     router.push(href);
   };
@@ -41,7 +40,7 @@ export default function DashboardNavbar({
       className="fixed top-0 left-0 w-full z-50 bg-gradient-to-b from-[#fff5f5]/70 to-transparent backdrop-blur-md border-b border-[#fbc2a9]/20"
     >
       <div className="max-w-7xl mx-auto flex items-center justify-between px-6 py-4">
-        {/* Logo/Brand */}
+
         <button 
           onClick={() => handleNavigation("/dashboard")}
           className="flex items-center gap-2"
@@ -58,7 +57,6 @@ export default function DashboardNavbar({
           </span>
         </button>
 
-        {/* Desktop Navigation */}
         <div className="hidden md:flex items-center gap-6">
           {navLinks.map((link) => (
             <motion.div
@@ -79,7 +77,6 @@ export default function DashboardNavbar({
             </motion.div>
           ))}
 
-          {/* User Avatar & Logout */}
           {user && (
             <div className="flex items-center gap-3 ml-2">
               <div className="flex items-center gap-2 px-3 py-1.5 bg-white/70 rounded-full border border-[#fbc2a9]/30">
@@ -102,7 +99,6 @@ export default function DashboardNavbar({
           )}
         </div>
 
-        {/* Mobile menu button */}
         <button
           className="md:hidden text-[#f5576c] hover:opacity-80 transition"
           onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
@@ -111,7 +107,6 @@ export default function DashboardNavbar({
         </button>
       </div>
 
-      {/* Mobile Menu */}
       <AnimatePresence>
         {isMobileMenuOpen && (
           <motion.div

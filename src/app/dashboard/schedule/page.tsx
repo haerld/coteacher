@@ -8,14 +8,7 @@ import { supabase } from "@/lib/supabaseClient";
 import { useRouter } from "next/navigation";
 import jsPDF from "jspdf";
 import { Spinner } from "@/components/ui/spinner";
-
-/**
- * Notes:
- * - Grid granularity: 5 minutes
- * - 1 session = 55 minutes. DB durations snap to 1..3 sessions (55/110/165).
- * - schedule_days expected as ARRAY of strings like ['Mon','Tue'] or ['Monday'].
- * - PDF renders a timetable: columns per day, blocks positioned by start time and height by duration.
- */
+import { toast, useSonner } from "sonner";
 
 export default function SchedulePage() {
   const router = useRouter();
@@ -26,14 +19,12 @@ export default function SchedulePage() {
   const [isSaving, setIsSaving] = useState(false);
   const [teacher, setTeacher] = useState<any>(null);
 
-  // schedule window (7:00 - 21:59)
   const startHour = 7;
   const endHour = 21;
   const days = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
   const blocksPerDay = (endHour - startHour + 1) * 12; // 5-min rows
-  const BLOCK_HEIGHT_PX = 14; // height per 5-min block in px (adjust for density)
+  const BLOCK_HEIGHT_PX = 14;
 
-  // parse time string -> minutes since midnight
   const parseTimeToMinutes = (t: string | null) => {
     if (!t) return null;
     const parts = String(t).split(":").map((p) => parseInt(p, 10));
@@ -47,7 +38,6 @@ export default function SchedulePage() {
     return sessions;
   };
 
-  // load current user and classes
   useEffect(() => {
     const load = async () => {
       setLoading(true);
@@ -83,9 +73,8 @@ export default function SchedulePage() {
         return;
       }
 
-      // map DB rows into a consistent shape
       const mapped = (data || []).map((r: any) => {
-        const title = r.class_name || r.subject || r.class_code || "Untitled";
+        const title = r.class_code || r.subject || r.class_name || "Untitled";
         return {
           id: r.id,
           title,
@@ -112,7 +101,6 @@ export default function SchedulePage() {
   };
   },[teacher])
 
-  // build blocks for rendering
   const blocksByDay = useMemo(() => {
     const map: Record<string, any[]> = {};
     for (const d of days) map[d] = [];
@@ -153,7 +141,6 @@ export default function SchedulePage() {
       });
     });
 
-    // Sort blocks per day by startMin for predictable stacking
     for (const d of days) {
       map[d].sort((a, b) => a.startMin - b.startMin);
     }
@@ -166,7 +153,7 @@ export default function SchedulePage() {
     router.replace("/auth/login");
   };
 
-  /* ------------------ PDF export: render timetable blocks per day ------------------ */
+  /* ------------------ PDF export ------------------ */
   const handleExportPDF = async () => {
     setIsSaving(true);
     const doc = new jsPDF({ unit: "pt", format: "a4", orientation: "portrait" });
@@ -177,7 +164,6 @@ export default function SchedulePage() {
     const headerHeight = 40;
     const name = teacher.firstname + ' ' + teacher.lastname;
 
-    // header
     doc.setFont("helvetica", "bold");
     doc.setFontSize(18);
     doc.setTextColor("#f5576c");
@@ -188,34 +174,23 @@ export default function SchedulePage() {
     doc.text(`Teacher: ${name || "Unknown"}`, margin, topY + 18);
     doc.text(`Email: ${user?.email || ""}`, margin + 200, topY + 18);
 
-    // compute drawing area for timetable
     const tableY = topY + headerHeight;
     const tableHeight = pageHeight - tableY - 60;
     const tableWidth = pageWidth - margin * 2;
-
-    // columns: time label column small, then days equal width
     const timeColW = 60;
     const dayColW = (tableWidth - timeColW) / days.length;
-
-    // pixels per minute mapping for PDF area
     const totalMinutesDisplayed = (endHour - startHour + 1) * 60;
-    // but to avoid super narrow blocks, compute scale
     const pxPerMinute = tableHeight / totalMinutesDisplayed;
 
-    // draw day headers
     doc.setFontSize(10);
     doc.setFont("helvetica", "bold");
     days.forEach((d, i) => {
       const x = margin + timeColW + i * dayColW + 6;
       doc.text(d, x, tableY + 12);
     });
-
-    // draw vertical lines for columns (optional subtle)
     doc.setDrawColor(220);
-    // time column vertical line
     doc.setLineWidth(0.5);
     doc.line(margin + timeColW, tableY - 4, margin + timeColW, tableY + tableHeight);
-    // day column separators
     for (let i = 0; i <= days.length; i++) {
       const x = margin + timeColW + i * dayColW;
       doc.setDrawColor(240);
@@ -223,76 +198,84 @@ export default function SchedulePage() {
       doc.line(x, tableY - 6, x, tableY + tableHeight);
     }
 
-    // draw horizontal hour separators (darker) and subtle ticks for 30 minutes
     doc.setFontSize(8);
     for (let m = startHour * 60; m <= (endHour + 1) * 60; m += 60) {
       const y = tableY + (m - startHour * 60) * pxPerMinute;
       doc.setDrawColor(200);
       doc.setLineWidth(0.6);
       doc.line(margin, y, margin + tableWidth, y);
-      // draw hour label in time column
       const hh = Math.floor(m / 60);
       const label = `${hh % 12 || 12}:00 ${hh < 12 ? "AM" : "PM"}`;
       doc.setTextColor("#f5576c");
       doc.text(label, margin + 4, y - 2);
     }
 
-    // for each day, draw blocks
     days.forEach((day, dayIdx) => {
-      const blocks = blocksByDay[day] || [];
-      // to visually separate overlapping blocks, we keep track of stacking index for small horizontal offset (max offset)
-      blocks.forEach((b: any, idx: number) => {
-        const startMin = b.startMin;
-        const duration = b.duration;
-        const y = tableY + (startMin - startHour * 60) * pxPerMinute;
-        const h = Math.max(12, duration * pxPerMinute); // min height for visibility
-        const x = margin + timeColW + dayIdx * dayColW + 6 + (idx % 3) * 6; // small offset for overlaps
-        const w = dayColW - 12 - (idx % 3) * 6;
+    const blocks = blocksByDay[day] || [];
+    blocks.forEach((b: any) => {
+      const startMin = b.startMin;
+      const duration = b.duration;
 
-        // block background
-        doc.setFillColor(245, 87, 108); // base pink
-        doc.setDrawColor(240);
-        doc.roundedRect(x, y + 2, w, h - 4, 4, 4, "F");
+      const y = tableY + (startMin - startHour * 60) * pxPerMinute;
+      const h = Math.max(12, duration * pxPerMinute);
 
-        // text: title (bold), room & time (smaller)
-        const padding = 6;
-        const maxTextWidth = w - padding * 2;
-        doc.setTextColor(255, 255, 255);
-        doc.setFont("helvetica", "bold");
-        doc.setFontSize(10);
+      const x = margin + timeColW + dayIdx * dayColW + 6;
+      const w = dayColW - 12;
 
-        // title (truncate if necessary)
-        const title = b.title || "Untitled";
-        const titleLines = doc.splitTextToSize(title, maxTextWidth);
-        const lineLimit = 2;
-        const titleToRender = titleLines.slice(0, lineLimit);
+      doc.setFillColor(245, 87, 108);
+      doc.setDrawColor(240);
+      doc.roundedRect(x, y + 2, w, h - 4, 4, 4, "F");
 
-        doc.text(titleToRender, x + padding, y + padding + 8, { maxWidth: maxTextWidth });
+      const padding = 6;
+      const maxTextWidth = w - padding * 2;
 
-        doc.setFont("helvetica", "normal");
-        doc.setFontSize(8);
-        const hhStart = Math.floor(b.startMin / 60);
-        const mmStart = b.startMin % 60;
-        const hhEnd = Math.floor((b.startMin + b.duration) / 60);
-        const mmEnd = (b.startMin + b.duration) % 60;
-        const timeRange = `${hhStart % 12 || 12}:${String(mmStart).padStart(2, "0")} - ${hhEnd % 12 || 12}:${String(mmEnd).padStart(2, "0")}`;
-        const room = b.room_number ? `Room ${b.room_number}` : "";
+      doc.setTextColor(255, 255, 255);
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(8);
 
-        const info = [room, timeRange].filter(Boolean).join(" • ");
-        const infoLines = doc.splitTextToSize(info, maxTextWidth);
-        doc.text(infoLines, x + padding, y + padding + 8 + (titleToRender.length * 12));
+      const title = b.title || "Untitled";
+      const titleLines = doc.splitTextToSize(title, maxTextWidth);
+      const titleToRender = titleLines.slice(0, 2); // max 2 lines
+
+      doc.text(titleToRender, x + padding, y + padding + 8, {
+        maxWidth: maxTextWidth,
       });
-    });
 
-    // footer
+      // Time & room
+      doc.setFont("helvetica", "normal");
+      doc.setFontSize(8);
+
+      const hhStart = Math.floor(b.startMin / 60);
+      const mmStart = b.startMin % 60;
+      const hhEnd = Math.floor((b.startMin + b.duration) / 60);
+      const mmEnd = (b.startMin + b.duration) % 60;
+
+      const timeRange = `${hhStart % 12 || 12}:${String(mmStart).padStart(
+        2,
+        "0"
+      )} - ${hhEnd % 12 || 12}:${String(mmEnd).padStart(2, "0")}`;
+
+      const room = b.room_number ? `Room ${b.room_number}` : "";
+      const info = [room, timeRange].filter(Boolean).join(" • ");
+      const infoLines = doc.splitTextToSize(info, maxTextWidth);
+
+      doc.text(
+        infoLines,
+        x + padding,
+        y + padding + 8 + titleToRender.length * 12
+      );
+    });
+  });
+
+
     doc.setFontSize(10);
     doc.setTextColor("#888");
     doc.text("Generated by CoTeacher", margin, pageHeight - 28);
 
-    // finish
     await new Promise((r) => setTimeout(r, 300));
     setIsSaving(false);
     doc.save(`${name}_Weekly_Timetable.pdf`);
+    toast(`PDF downloaded successfully!`);
   };
 
   if (loading) {
@@ -370,11 +353,10 @@ export default function SchedulePage() {
               className="min-w-[1000px] relative"
               style={{
                 display: "grid",
-                gridTemplateColumns: `90px repeat(${days.length}, 1fr)`, // slightly wider time col
+                gridTemplateColumns: `90px repeat(${days.length}, 1fr)`,
                 gridTemplateRows: `auto repeat(${blocksPerDay}, ${BLOCK_HEIGHT_PX}px)`,
               }}
             >
-              {/* Sticky header row (days) */}
               <div
                 style={{
                   position: "sticky",
@@ -417,7 +399,6 @@ export default function SchedulePage() {
                 ))}
               </div>
 
-              {/* Time label column and row backgrounds */}
               {Array.from({ length: blocksPerDay }).map((_, idx) => {
                 const absoluteMin = startHour * 60 + idx * 5;
                 const hh = Math.floor(absoluteMin / 60);
@@ -425,7 +406,6 @@ export default function SchedulePage() {
                 let bg = idx % 2 === 0 ? "#ffffff" : "#ffffff";
                 if (mm === 0) bg = "#ffffff";
 
-                // Time label cell
                 return (
                   <div
                     key={`time-${idx}`}
@@ -448,7 +428,6 @@ export default function SchedulePage() {
                 );
               })}
 
-              {/* Day columns base cells (for grid visuals) */}
               {days.map((day, colIdx) =>
                 Array.from({ length: blocksPerDay }).map((_, rowIdx) => {
                   const absoluteMin = startHour * 60 + rowIdx * 5;
@@ -469,13 +448,11 @@ export default function SchedulePage() {
                 })
               )}
 
-              {/* Render blocks per day */}
               {days.map((day, colIdx) =>
                 (blocksByDay[day] || []).map((b: any, i: number) => {
-                  const gridRowStart = b.rowStart + 2; // +2 because header occupies row 1
+                  const gridRowStart = b.rowStart + 2;
                   const gridRowEnd = b.rowStart + b.rowSpan + 2;
-                  const overlapOffset = i * 6;
-                  const zIndex = 40 + i;
+
                   return (
                     <div
                       key={`${b.id}-${i}`}
@@ -484,7 +461,7 @@ export default function SchedulePage() {
                         gridRow: `${gridRowStart} / ${gridRowEnd}`,
                         padding: 6,
                         position: "relative",
-                        zIndex,
+                        zIndex: 40, // no stacking needed since no overlaps
                       }}
                     >
                       <div
@@ -492,8 +469,8 @@ export default function SchedulePage() {
                         style={{
                           position: "absolute",
                           top: 2,
-                          left: `${overlapOffset}px`,
-                          right: `${overlapOffset}px`,
+                          left: 2,       // FULL WIDTH, NO OFFSET
+                          right: 2,      // FULL WIDTH, NO OFFSET
                           bottom: 2,
                           background: "linear-gradient(90deg,#f5576c,#F7BB97)",
                           boxShadow: "0 6px 14px rgba(245,87,108,0.12)",
@@ -502,7 +479,9 @@ export default function SchedulePage() {
                           lineHeight: 1.05,
                           overflow: "hidden",
                         }}
-                        title={`${b.title} • ${b.room_number} • ${Math.floor(b.startMin / 60)}:${String(b.startMin % 60).padStart(2, "0")}`}
+                        title={`${b.title} • ${b.room_number} • ${Math.floor(b.startMin / 60)}:${String(
+                          b.startMin % 60
+                        ).padStart(2, "0")}`}
                       >
                         <div className="truncate" style={{ fontWeight: 700 }}>
                           {b.title}
@@ -510,13 +489,16 @@ export default function SchedulePage() {
                         <div className="text-xs font-normal opacity-90 mt-1">
                           {`${b.room_number ? `Room ${b.room_number} • ` : ""}${Math.floor(b.startMin / 60)}:${String(
                             b.startMin % 60
-                          ).padStart(2, "0")} - ${Math.floor((b.startMin + b.duration) / 60)}:${String((b.startMin + b.duration) % 60).padStart(2, "0")}`}
+                          ).padStart(2, "0")} - ${Math.floor((b.startMin + b.duration) / 60)}:${String(
+                            (b.startMin + b.duration) % 60
+                          ).padStart(2, "0")}`}
                         </div>
                       </div>
                     </div>
                   );
                 })
               )}
+
             </div>
           </motion.div>
         )}
