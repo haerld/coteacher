@@ -27,15 +27,28 @@ export default function ActivityDetailPage() {
   const [updating, setUpdating] = useState(false);
 
   useEffect(() => {
-    fetchData();
-    const channel = supabase
-      .channel(`activity-detail-${activityId}`)
-      .on("postgres_changes", { event: "*", schema: "public", table: "student_activities" }, () => {
+  fetchData();
+
+  const channel = supabase
+    .channel(`activity-detail-${activityId}`)
+    .on(
+      "postgres_changes",
+      {
+        event: "*",
+        schema: "public",
+        table: "student_activities",
+        filter: `activity_id=eq.${activityId}`
+      },
+      () => {
         fetchStudents();
-      })
-      .subscribe();
-    return () => supabase.removeChannel(channel);
-  }, [activityId]);
+      }
+    )
+    .subscribe();
+
+  return () => {
+    supabase.removeChannel(channel);
+  };
+}, [activityId]);
 
   async function fetchData() {
     setLoading(true);
@@ -64,7 +77,6 @@ export default function ActivityDetailPage() {
   }
 
   async function fetchStudents() {
-    // fetch student_activities joined with students
     const { data } = await supabase
       .from("student_activities")
       .select("id, student_id, status, students(id, name)")
