@@ -117,6 +117,11 @@ export default function StudentPublicScanPage() {
     }
   }
 
+  function handleBack () {
+    stopScanner();
+    router.back();
+  }
+
   function parseLegacy(txt: string) {
     try {
       const parts = txt.split("|").reduce((acc: any, p) => {
@@ -169,7 +174,7 @@ export default function StudentPublicScanPage() {
             </div>
 
             <button
-              onClick={() => router.back()}
+              onClick={handleBack}
               className="p-2 rounded-lg text-gray-600 hover:text-[#f5576c]"
             >
               <ArrowLeft className="w-5 h-5" />
