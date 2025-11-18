@@ -20,8 +20,8 @@ export default function SchedulePage() {
   const [teacher, setTeacher] = useState<any>(null);
 
   const startHour = 7;
-  const endHour = 21;
-  const days = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+  const endHour = 20;
+  const days = ["Mon", "Tue", "Wed", "Thu", "Fri"];
   const blocksPerDay = (endHour - startHour + 1) * 12; // 5-min rows
   const BLOCK_HEIGHT_PX = 14;
 
@@ -75,9 +75,11 @@ export default function SchedulePage() {
 
       const mapped = (data || []).map((r: any) => {
         const title = r.class_code || r.subject || r.class_name || "Untitled";
+        const section = r.class_section || "Not classified";
         return {
           id: r.id,
           title,
+          section,
           schedule_days: r.schedule_days || r.schedule_days_text || [],
           time_start: r.time_start ? String(r.time_start) : null,
           time_end: r.time_end ? String(r.time_end) : null,
@@ -131,6 +133,7 @@ export default function SchedulePage() {
         map[day].push({
           id: cls.id + "-" + day,
           title: cls.title,
+          section: cls.section,
           rowStart,
           rowSpan,
           startMin: displayStartMin,
@@ -231,9 +234,9 @@ export default function SchedulePage() {
 
       doc.setTextColor(255, 255, 255);
       doc.setFont("helvetica", "bold");
-      doc.setFontSize(8);
+      doc.setFontSize(6);
 
-      const title = b.title || "Untitled";
+      const title = `${b.title} - ${b.section}` || "Untitled";
       const titleLines = doc.splitTextToSize(title, maxTextWidth);
       const titleToRender = titleLines.slice(0, 2); // max 2 lines
 
@@ -243,7 +246,7 @@ export default function SchedulePage() {
 
       // Time & room
       doc.setFont("helvetica", "normal");
-      doc.setFontSize(8);
+      doc.setFontSize(5);
 
       const hhStart = Math.floor(b.startMin / 60);
       const mmStart = b.startMin % 60;
@@ -461,7 +464,7 @@ export default function SchedulePage() {
                         gridRow: `${gridRowStart} / ${gridRowEnd}`,
                         padding: 6,
                         position: "relative",
-                        zIndex: 40, // no stacking needed since no overlaps
+                        zIndex: 40,
                       }}
                     >
                       <div
@@ -469,8 +472,8 @@ export default function SchedulePage() {
                         style={{
                           position: "absolute",
                           top: 2,
-                          left: 2,       // FULL WIDTH, NO OFFSET
-                          right: 2,      // FULL WIDTH, NO OFFSET
+                          left: 2,       
+                          right: 2,      
                           bottom: 2,
                           background: "linear-gradient(90deg,#f5576c,#F7BB97)",
                           boxShadow: "0 6px 14px rgba(245,87,108,0.12)",
@@ -484,7 +487,7 @@ export default function SchedulePage() {
                         ).padStart(2, "0")}`}
                       >
                         <div className="truncate" style={{ fontWeight: 700 }}>
-                          {b.title}
+                          {`${b.title} - ${b.section}`}
                         </div>
                         <div className="text-xs font-normal opacity-90 mt-1">
                           {`${b.room_number ? `Room ${b.room_number} • ` : ""}${Math.floor(b.startMin / 60)}:${String(

@@ -29,7 +29,6 @@ export default function StudentSummaryPage() {
           return;
         }
 
-        // decrypt id
         let studentId = "";
         try {
           studentId = decrypt(decodeURIComponent(encryptedId));
@@ -40,7 +39,6 @@ export default function StudentSummaryPage() {
           return;
         }
 
-        // Try student_summary view first
         const { data: summary, error: sumErr } = await supabase
           .from("student_summary")
           .select("*")
@@ -49,14 +47,12 @@ export default function StudentSummaryPage() {
           .single();
 
         if (sumErr && sumErr.code !== "PGRST116") {
-          // PGRST116 sometimes means no rows; we handle below
           console.error("student_summary fetch error", sumErr);
         }
 
         if (summary) {
           setStudentSummary(summary);
         } else {
-          // fallback: assemble from tables
           const { data: sRow } = await supabase
             .from("students")
             .select("id, name, student_link, qr_token, class_id")
@@ -129,7 +125,6 @@ export default function StudentSummaryPage() {
           });
         }
 
-        // Activities list (student_activities joined with activities)
         const { data: actRows } = await supabase
           .from("student_activities")
           .select("id, status, activity_title, activity_description, deadline, activity_submission_link, activity_id")
@@ -147,7 +142,6 @@ export default function StudentSummaryPage() {
     };
 
     init();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [encryptedId]);
 
   const summary = useMemo(() => studentSummary, [studentSummary]);

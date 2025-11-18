@@ -504,9 +504,9 @@ export default function StudentsPage() {
                 className="border rounded-lg px-3 py-2 outline-none"
               >
                 <option value="">Select Class</option>
-                {classes.map((c) => (
+                {classes?.map((c) => (
                   <option key={c.id} value={c.id}>
-                    {c.class_code ?? c.class_name}
+                    {`${c.class_code} - ${c.class_section}`}
                   </option>
                 ))}
               </select>
