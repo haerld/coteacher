@@ -608,7 +608,7 @@ export default function ClassDetailsPage() {
           await supabase.auth.signOut();
           router.replace("/auth/login");
         }}
-        currentPage="Class Details"
+        currentPage="Classes"
       />
 
       <div className="relative z-10 sm:mt-18 max-w-6xl mx-auto pt-24 p-4 sm:p-6 lg:p-8">

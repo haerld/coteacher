@@ -34,7 +34,7 @@ export default function SchedulePage() {
 
   const minutesToSessions = (minutes: number) => {
     if (!minutes || minutes <= 0) return 1;
-    const sessions = Math.max(1, Math.min(3, Math.round(minutes / 55)));
+    const sessions = Math.max(1, Math.min(5, Math.round(minutes / 55)));
     return sessions;
   };
 
